@@ -1,5 +1,5 @@
 # Configuración de tareas de DaVinci Exportador mediante Mise
-# Reutiliza el estándar común: dev, build, release, publish
+# Reutiliza el estándar común: dev, build, check, test, release, publish
 
 [tasks.dev]
 raw_args = true
@@ -8,7 +8,17 @@ file = "scripts/mise-task.ts"
 
 [tasks.build]
 raw_args = true
-description = "Compilar y verificar sintaxis de Python sin generar instalador"
+description = "Generar el ejecutable de escritorio (PyInstaller) sin generar instalador"
+file = "scripts/mise-task.ts"
+
+[tasks.check]
+raw_args = true
+description = "Verificar sintaxis, importación y contratos sin generar artefactos"
+file = "scripts/mise-task.ts"
+
+[tasks.test]
+raw_args = true
+description = "Ejecutar las pruebas unitarias del motor y de la capa de servicio"
 file = "scripts/mise-task.ts"
 
 [tasks.release]

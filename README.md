@@ -18,19 +18,26 @@ DaVinci Exportador implementa la interfaz universal de tareas mediante Mise:
 
 | Tarea | Propósito |
 |---|---|
-| `mise dev` | Ejecutar en modo desarrollo (`python main.py`). |
-| `mise build` | Compilar y verificar sintaxis de Python sin generar instaladores. |
+| `mise dev` | Ejecutar en modo desarrollo (Flet Desktop). |
+| `mise build` | Generar el ejecutable de escritorio (PyInstaller) sin instalador. |
+| `mise check` | Verificar sintaxis, importación de motor e interfaz y contratos de los scripts, sin generar artefactos. |
+| `mise test` | Ejecutar las pruebas unitarias del motor y de la capa de servicio. |
 | `mise release` | Generar instalador oficial Inno Setup en `release/` sin publicar. |
 | `mise publish` | Publicar en GitHub Releases y sincronizar ficha en Aurora (`--plan` y `--check` sin escritura). |
 
 Opciones de inspección y comprobación:
-- `--plan`: Muestra el comando y las operaciones planificadas sin ejecutar procesos ni modificar el sistema (`mise dev --plan`, `mise release --plan`, `mise publish --plan`).
+- `--plan`: Muestra el comando y las operaciones planificadas sin ejecutar procesos ni modificar el sistema (`mise dev --plan`, `mise build --plan`, `mise check --plan`, `mise test --plan`, `mise release --plan`, `mise publish --plan`).
 - `--check`: (para `publish`) Verifica el estado del repositorio, tags, notas y la presencia e integridad del instalador en `release/` sin publicar nada (`mise publish --check`).
 - Canal explícito `github`: `mise publish github` (omite la sincronización con la web de Aurora).
 
+`release` prepara artefactos y no publica; `publish` es la única tarea con efecto
+remoto y exige autorización explícita. Ninguna tarea publica ni instala en
+modo `--plan` o `--check`.
+
 ## Ejecutar la app (Método Directo)
 
-El proyecto usa `uv` con un único entorno `.venv`.
+El proyecto usa `uv` con un único entorno `.venv`. `mise dev` es la entrada
+canónica; estos comandos son alias equivalentes:
 
 ```powershell
 uv sync
@@ -138,6 +145,8 @@ abre la app o la línea de comandos.
 
 ```text
 main.py                    Punto de entrada único: app de escritorio o CLI
+mise.toml                  Tareas canónicas del proyecto (dev, build, check, test, release, publish)
+scripts/mise-task.ts       Despachador único de las tareas de Mise
 src/davinci_exportador/    Motor (sin dependencias, sin Flet)
   modelo.py                Composicion, Lectura, Node
   fusion.py                Lectura de las tablas Fusion comprimidas
@@ -169,6 +178,21 @@ va siempre de `src-flet` hacia `src`.
 
 ## Compilar el instalador
 
+Mise es la entrada de comandos:
+
+```powershell
+mise build    # ejecutable de escritorio, sin instalador
+mise release  # instalador Inno Setup en release\
+```
+
+Ambos terminan en el mismo script, `scripts/packaging/Build-Installer.ps1`, que
+regenera `packaging\windows\version.iss` con la versión de `pyproject.toml`,
+compila el ejecutable de escritorio con PyInstaller (incluye el cliente de
+Flet y el icono oficial) y, en el caso de `release`, genera el instalador Inno
+Setup en `release\`. Con `-SkipDesktopBuild` reutiliza el ejecutable ya
+compilado. El script solo produce artefactos locales: la publicación remota
+vive en `mise publish`.
+
 Desde la raíz, el mismo punto de entrada orquesta también la compilación:
 
 ```powershell
@@ -178,14 +202,8 @@ uv run python main.py build
 Equivale a:
 
 ```powershell
-pwsh -File scripts\packaging\Build-Installer.ps1
+pwsh -File scripts\packaging\Build-Installer.ps1 -LocalOnly
 ```
-
-El script regenera `packaging\windows\version.iss` con la versión de
-`pyproject.toml`, compila el ejecutable de escritorio con PyInstaller
-(incluye el cliente de Flet y el icono oficial) y genera el instalador Inno
-Setup en `release\`. Con `-SkipDesktopBuild` reutiliza el ejecutable ya
-compilado.
 
 ## Alcance y límites
 
@@ -221,6 +239,12 @@ compilado.
 Las exportaciones DRP/DRB no deben confundirse con respaldos completos de medios.
 
 ## Pruebas
+
+```powershell
+mise test
+```
+
+Equivale a:
 
 ```powershell
 uv run python -m unittest discover -s tests -v
