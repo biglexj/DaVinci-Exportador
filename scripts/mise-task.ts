@@ -144,109 +144,6 @@ function assertOpciones(action: string, args: string[], permitidas: string[]): v
     }
 }
 
-async function handlePublish(args: string[]): Promise<number> {
-    const isPlan = args.includes("--plan");
-    const isCheck = args.includes("--check");
-    const positional = args.filter((arg) => !arg.startsWith("-"));
-    const channel = positional[0] ?? "all";
-
-    if (!["all", "github"].includes(channel)) {
-        throw new Error(`Canal desconocido: ${channel}. Usa 'github' o 'all'.`);
-    }
-
-    const effectiveChannels = channel === "github" ? ["GitHub Releases"] : ["GitHub Releases", "Aurora Web (biglexj.com)"];
-
-    console.log(`\n=== Publicación: ${appName} v${appVersion} ===`);
-    console.log(`Repositorio : ${repository}`);
-    console.log(`Canales     : ${effectiveChannels.join(" + ")}`);
-
-    if (isPlan) {
-        console.log("\n[Plan de publicación]");
-        console.log("1. Verificar que el repositorio esté en rama limpia y commit en remoto.");
-        console.log(`2. Comprobar instalador local en release/: DaVinciExportador-Setup-${appVersion}.exe.`);
-        console.log("3. Validar RELEASE_MESSAGE.md (notas de versión públicas sin secretos).");
-        console.log(`4. Crear tag git v${appVersion} y GitHub Release vía gh.`);
-        if (channel === "all") {
-            console.log("5. Sincronizar metadatos y enlace de descarga en Aurora (https://www.biglexj.com).");
-        } else {
-            console.log("5. Sincronización con Aurora omitida (canal explícito: github).");
-        }
-        console.log("\n(--plan completado: no se realizaron cambios ni consultas de red)");
-        return 0;
-    }
-
-    if (isCheck) {
-        console.log("\n[Comprobación de preparación (--check)]");
-        let hasErrors = false;
-
-        // 1. Git status & commits
-        const headCheck = runCmdSync(["git", "rev-parse", "--verify", "HEAD"]);
-        if (headCheck.code !== 0) {
-            console.warn("⚠️  Aviso: El repositorio local aún no contiene commits.");
-            hasErrors = true;
-        } else {
-            const gitStatus = runCmdSync(["git", "status", "--porcelain"]);
-            if (gitStatus.stdout) {
-                console.warn("⚠️  Aviso: El repositorio tiene cambios locales sin confirmar.");
-            } else {
-                console.log("✅ Árbol Git limpio.");
-            }
-        }
-
-        // 1b. Remoto configurado: sin remoto no hay publicación posible.
-        const remoteCheck = runCmdSync(["git", "remote"]);
-        const remotes = remoteCheck.stdout ? remoteCheck.stdout.split(/\r?\n/).filter(Boolean) : [];
-        if (remotes.length === 0) {
-            console.warn("❌ El repositorio local no tiene ningún remoto configurado: no hay dónde publicar.");
-            hasErrors = true;
-        } else {
-            console.log(`✅ Remoto configurado: ${remotes.join(", ")}`);
-        }
-
-        // 2. Git tag
-        const tagCheck = runCmdSync(["git", "tag", "-l", `v${appVersion}`]);
-        if (tagCheck.stdout.includes(`v${appVersion}`)) {
-            console.warn(`⚠️  El tag v${appVersion} ya existe localmente.`);
-        } else {
-            console.log(`✅ Tag v${appVersion} libre localmente.`);
-        }
-
-        // 3. Artefactos en release/
-        const releaseDir = join(root, "release");
-        let foundInstaller: string | null = null;
-        if (existsSync(releaseDir)) {
-            const files = readdirSync(releaseDir);
-            foundInstaller = files.find((f) => f.startsWith("DaVinciExportador-Setup") && f.endsWith(".exe")) ?? null;
-        }
-
-        if (foundInstaller) {
-            const fullPath = join(releaseDir, foundInstaller);
-            const st = statSync(fullPath);
-            const hash = sha256(fullPath);
-            console.log(`✅ Instalador presente: ${foundInstaller} (${(st.size / 1024 / 1024).toFixed(2)} MB)`);
-            console.log(`   SHA-256: ${hash}`);
-        } else {
-            console.warn(`❌ Instalador no encontrado en release/DaVinciExportador-Setup-*.exe. Ejecuta 'mise release' antes de publicar.`);
-            hasErrors = true;
-        }
-
-        // 4. Notas de versión
-        const notesPath = join(root, "RELEASE_MESSAGE.md");
-        if (existsSync(notesPath)) {
-            console.log("✅ RELEASE_MESSAGE.md presente.");
-        } else {
-            console.warn("⚠️  RELEASE_MESSAGE.md no encontrado en la raíz.");
-        }
-
-        console.log("\n(--check completado: modo solo lectura sin escrituras)");
-        return hasErrors ? 1 : 0;
-    }
-
-    console.error("\n❌ Publicación bloqueada: Requiere confirmación y autorización explícita para publicar en producción.");
-    console.error("   Usa --plan para revisar los pasos previstos o --check para verificar el estado de los artefactos.");
-    return 1;
-}
-
 async function runPasos(pasos: { titulo: string; cmd: string[] }[], isPlan: boolean): Promise<number> {
     for (const paso of pasos) {
         console.log(`\n==> ${paso.titulo}`);
@@ -270,8 +167,20 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
     }
 
     if (action === "publish") {
-        assertOpciones("publish", rest, ["--plan", "--check"]);
-        return handlePublish(rest);
+        return publishRelease({
+            slug: "davinci-exportador",
+            appName: "DaVinci Exportador",
+            repository: "biglexj/DaVinci-Exportador",
+            version: appVersion,
+            projectRoot: root,
+            primaryAssetPattern: new RegExp(`^DaVinciExportador.*\\.exe$`, "i"),
+            build: async (isPlan) => {
+                const psArgs = ["powershell","-NoProfile","-ExecutionPolicy","Bypass","-File","./scripts/packaging/Build-Installer.ps1","-LocalOnly"];
+                if (isPlan) return 0;
+                const child = Bun.spawn(psArgs, { cwd: root, stdin: "inherit", stdout: "inherit", stderr: "inherit" });
+                return (await child.exited) ?? 0;
+            }
+        }, rest);
     }
 
     assertOpciones(action, rest, ["--plan"]);
@@ -338,23 +247,6 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
 
         const child = Bun.spawn(psArgs, { cwd: root, stdin: "inherit", stdout: "inherit", stderr: "inherit" });
         return (await child.exited) ?? 0;
-    }
-
-    if (action === "publish") {
-        return publishRelease({
-            slug: "davinci-exportador",
-            appName: "DaVinci Exportador",
-            repository: "biglexj/DaVinci-Exportador",
-            version: appVersion,
-            projectRoot: root,
-            primaryAssetPattern: new RegExp(`^DaVinciExportador.*\\.exe$`, "i"),
-            build: async (isPlan) => {
-                const psArgs = ["powershell","-NoProfile","-ExecutionPolicy","Bypass","-File","./scripts/packaging/Build-Installer.ps1","-LocalOnly"];
-                if (isPlan) return 0;
-                const child = Bun.spawn(psArgs, { cwd: root, stdin: "inherit", stdout: "inherit", stderr: "inherit" });
-                return (await child.exited) ?? 0;
-            }
-        }, rest);
     }
 
     throw new Error(`Acción desconocida: ${action}. Usa mise dev, mise build, mise check, mise test, mise release o mise publish.`);
