@@ -1,0 +1,27 @@
+
+# Archivos temporales de agentes
+/test/
+/scratch/
+/temp/
+/exports/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+.venv/
+.venv-pypy/
+.venv-resolve/
+venv/
+
+# Empaquetado
+/release/
+
+# Configuración local y secretos
+.env
+*.local.json

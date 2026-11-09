@@ -1,0 +1,21 @@
+[project]
+name = "davinci-exportador"
+version = "0.2.0"
+description = "Interfaz de escritorio para exportar títulos Fusion como plantillas de DaVinci Resolve"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "biglexj" }]
+dependencies = [
+    "flet[desktop]==1.0.5",
+]
+
+[dependency-groups]
+dev = []
+
+[tool.uv]
+package = false
+
+[tool.pyright]
+include = ["src", "src-flet", "tests", "main.py"]
+extraPaths = ["src", "src-flet", "."]

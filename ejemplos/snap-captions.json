@@ -1,0 +1,20 @@
+{
+  "defaults": {
+    "creator": "Orson Lord",
+    "collection": "Subtítulos animados",
+    "credit": "Orson Lord"
+  },
+  "rules": [
+    {
+      "folder": "biglexj",
+      "creator": "Biglex J",
+      "collection": "Letras animadas",
+      "subfolder": null,
+      "strip_prefix": "biglexpe-",
+      "replace_hyphens": true,
+      "title_case": true,
+      "prefix": "Biglex J - ",
+      "credit": "OL"
+    }
+  ]
+}

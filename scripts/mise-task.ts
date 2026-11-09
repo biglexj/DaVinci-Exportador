@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { publishRelease } from "../../Scripts/releases/aurora-publisher.ts";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { relative, resolve, join } from "node:path";
@@ -331,11 +332,29 @@ export async function main(args = Bun.argv.slice(2)): Promise<number> {
     }
 
     if (action === "release") {
-        const cmd = [...powershellCmd, "-LocalOnly"];
-        console.log(`release ${appName}\nDirectorio: ${root}\nComando: ${cmd.join(" ")}`);
+        const psArgs = ["powershell","-NoProfile","-ExecutionPolicy","Bypass","-File","./scripts/packaging/Build-Installer.ps1","-LocalOnly"];
+        console.log(`release ${appName}\nDirectorio: ${root}\nComando: ${psArgs.join(" ")}`);
         if (isPlan) return 0;
-        const child = Bun.spawn(cmd, { cwd: root, stdin: "inherit", stdout: "inherit", stderr: "inherit" });
+
+        const child = Bun.spawn(psArgs, { cwd: root, stdin: "inherit", stdout: "inherit", stderr: "inherit" });
         return (await child.exited) ?? 0;
+    }
+
+    if (action === "publish") {
+        return publishRelease({
+            slug: "davinci-exportador",
+            appName: "DaVinci Exportador",
+            repository: "biglexj/DaVinci-Exportador",
+            version: appVersion,
+            projectRoot: root,
+            primaryAssetPattern: new RegExp(`^DaVinciExportador.*\\.exe$`, "i"),
+            build: async (isPlan) => {
+                const psArgs = ["powershell","-NoProfile","-ExecutionPolicy","Bypass","-File","./scripts/packaging/Build-Installer.ps1","-LocalOnly"];
+                if (isPlan) return 0;
+                const child = Bun.spawn(psArgs, { cwd: root, stdin: "inherit", stdout: "inherit", stderr: "inherit" });
+                return (await child.exited) ?? 0;
+            }
+        }, rest);
     }
 
     throw new Error(`Acción desconocida: ${action}. Usa mise dev, mise build, mise check, mise test, mise release o mise publish.`);
